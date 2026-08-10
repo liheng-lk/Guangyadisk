@@ -4,13 +4,14 @@
 扫码登录直接沿用 KoWming 原实现；目录浏览、整理上传、下载、移动、复制、WebDAV 等存储能力继续沿用原实现。
 """
 
+import time
 from typing import Any, Dict, List
 
 from ._plugin_legacy import ShukGuangYaDisk as _LegacyPlugin
 
 
 class ShukGuangYaDisk(_LegacyPlugin):
-    plugin_version = "2.2.11"
+    plugin_version = "2.2.12"
     plugin_author = "liheng-lk"
     author_url = "https://github.com/liheng-lk/Guangyadisk"
 
@@ -117,12 +118,57 @@ class ShukGuangYaDisk(_LegacyPlugin):
         }
 
     def poll_login(self) -> Dict[str, Any]:
-        """扫码轮询直接沿用 KoWming 原实现，成功后仅补充自动启用存储。"""
-        result = super().poll_login()
-        if result and result.get("success") and self._access_token:
-            self._activate_storage_after_login()
-            result["enabled"] = True
-        return result
+        """按 KoWming 原流程轮询 device_code；成功后直接落盘 token 并重新初始化存储。"""
+        if not self._device_code:
+            return {"success": False, "message": "请先获取二维码", "waiting": False, "stage": "missing_device_code"}
+        if self._qr_expires_at and time.time() > self._qr_expires_at:
+            return {"success": False, "message": "二维码已过期，请重新获取", "waiting": False, "stage": "expired"}
+
+        from .guangya_client import GuangYaClient
+
+        temp_client = GuangYaClient(
+            access_token=None,
+            refresh_token=None,
+            client_id=self._client_id,
+            device_id=self._device_id,
+        )
+        result = temp_client.poll_device_code(self._device_code)
+
+        if result and result.get("waiting"):
+            return {
+                "success": False,
+                "message": result.get("message") or "等待扫码确认...",
+                "waiting": True,
+                "stage": "authorization_pending",
+            }
+
+        if not result or not result.get("access_token"):
+            return {
+                "success": False,
+                "message": "已扫码，等待光鸭返回登录令牌...",
+                "waiting": True,
+                "stage": "token_pending",
+            }
+
+        self._access_token = str(result.get("access_token") or "").strip()
+        self._refresh_token = str(result.get("refresh_token") or "").strip()
+        if not self._access_token:
+            return {"success": False, "message": "光鸭未返回 access_token", "waiting": False, "stage": "missing_access_token"}
+
+        self._activate_storage_after_login()
+        self._device_code = ""
+        self._user_code = ""
+        self._verification_uri = ""
+        self._qr_expires_at = 0
+
+        return {
+            "success": True,
+            "message": "扫码登录成功，登录信息已保存",
+            "device_id": self._device_id,
+            "enabled": True,
+            "has_access_token": bool(self._access_token),
+            "has_refresh_token": bool(self._refresh_token),
+        }
 
 
 __all__ = ["ShukGuangYaDisk"]
