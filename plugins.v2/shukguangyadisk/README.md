@@ -1,63 +1,70 @@
 # Shuk-光鸭云盘
 
-MoviePilot / Emby 光鸭云盘存储插件，支持扫码登录、文件管理、存储挂载。
+当前维护仓库：`https://github.com/liheng-lk/Guangyadisk`
 
-## 功能特性
+MoviePilot / Emby / Jellyfin 光鸭云盘存储插件，支持扫码登录、文件管理、存储挂载、流式播放与 WebDAV。
 
-- **扫码登录** — 光鸭云盘原生设备码 OAuth2 授权
-- **Token 自动刷新** — 过期自动续签，无需手动干预
-- **文件管理** — 浏览、上传、下载、删除、重命名、新建文件夹
-- **存储挂载** — 作为 MoviePilot / Emby 外部存储源使用
-- **Vue 前端** — 现代化界面
+## 版本
+
+当前版本：**2.2.4**
+
+v2.2.4 主要修复新版 MoviePilot 调用 `get_item_strict()` 时出现：
+
+```text
+'GuangYaApi' object has no attribute 'get_item_strict'
+```
+
+当前实现保留原 GuangYaApi 完整逻辑，并通过兼容入口补齐新版存储接口。
 
 ## 安装
 
-### 插件市场安装（推荐）
+MoviePilot 自定义插件源填写：
 
-1. MoviePilot 后台 → **设置** → **插件市场**
-2. 添加自定义源：
-
-```
-https://github.com/ShukeBta/Guangyadisk
+```text
+https://github.com/liheng-lk/Guangyadisk
 ```
 
-3. 刷新市场，搜索 `Shuk-光鸭云盘`，点击安装
+当前实际插件目录：
 
-### 本地安装
-
-将 `plugins.v2/shuk-guangyadisk/` 目录复制到 MoviePilot 的 `app/plugins/` 目录下，重启即可。
-
-## 使用
-
-1. 启用插件
-2. 点击「获取二维码」，用光鸭云盘 App 扫码
-3. 扫码完成后自动登录
-4. 在存储管理中选择「Shuk-光鸭云盘」即可使用
-
-## 配置项
-
-| 配置项 | 说明 | 默认值 |
-|--------|------|--------|
-| 启用插件 | 是否启用 | false |
-| Client ID | 客户端标识 | guangya_web |
-| 每页数量 | 文件列表每页条数 | 100 |
-| 排序字段 | 文件排序方式 | 3 |
-| 排序类型 | 升序/降序 | 1 |
-| 永久删除 | 删除时跳过回收站 | false |
-
-## 文件结构
-
-```
-plugins.v2/shuk-guangyadisk/
-├── __init__.py          # 插件入口
-├── guangya_client.py    # HTTP 客户端 & 登录
-├── guangya_api.py       # 文件操作 API
-├── requirements.txt     # Python 依赖
-└── dist/                # Vue 前端资源
-    ├── index.html
-    └── assets/
+```text
+plugins.v2/shukguangyadisk/
 ```
 
-## 许可证
+请不要再使用旧文档中的 `plugins.v2/shuk-guangyadisk/` 路径。
+
+## 主要功能
+
+- 扫码 / 设备码登录
+- Token 自动刷新
+- 浏览、上传、下载、删除、重命名、新建目录
+- MoviePilot 存储挂载
+- `/stream` HTTP 流式代理
+- `/browse` 目录浏览 API
+- `/webdav` WebDAV 服务
+- Vue 前端管理页面
+
+## 兼容层结构
+
+```text
+shukguangyadisk/
+├── __init__.py
+├── _plugin_legacy.py
+├── guangya_api.py
+├── guangya_api_legacy.py
+├── guangya_client.py
+├── webdav_provider.py
+├── plugin.json
+└── dist/
+```
+
+`guangya_api_legacy.py` 保存原有完整文件操作逻辑；`guangya_api.py` 作为兼容入口增加新版 MoviePilot 所需的 `get_item_strict()`。
+
+`_plugin_legacy.py` 保存原插件主实现；`__init__.py` 负责当前 fork 的版本号、维护者和仓库地址。
+
+## 维护说明
+
+这是基于上游项目继续维护的 fork。原作者及历史贡献保留在 Git 历史中；当前 fork 的兼容修复和发布由 `liheng-lk` 维护。
+
+## License
 
 MIT
