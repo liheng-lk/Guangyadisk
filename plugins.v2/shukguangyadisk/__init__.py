@@ -9,7 +9,7 @@ from ._plugin_legacy import ShukGuangYaDisk as _LegacyPlugin
 
 
 class ShukGuangYaDisk(_LegacyPlugin):
-    plugin_version = "2.2.7"
+    plugin_version = "2.2.8"
     plugin_author = "liheng-lk"
     author_url = "https://github.com/liheng-lk/Guangyadisk"
 
@@ -18,30 +18,23 @@ class ShukGuangYaDisk(_LegacyPlugin):
     _sms_captcha_token: str = ""
 
     def get_api(self) -> List[Dict[str, Any]]:
-        """注册插件 API。
-
-        注意：MoviePilot 的插件 API 路由在插件加载/启动时注册，升级版本后需要重启
-        MoviePilot 才能确保新增路由生效。
-        """
         apis = list(super().get_api())
-        apis.extend(
-            [
-                {
-                    "path": "/login/sms/send",
-                    "endpoint": self.send_sms_code,
-                    "auth": "bear",
-                    "methods": ["POST"],
-                    "summary": "发送光鸭云盘短信验证码",
-                },
-                {
-                    "path": "/login/sms/verify",
-                    "endpoint": self.verify_sms_login,
-                    "auth": "bear",
-                    "methods": ["POST"],
-                    "summary": "校验短信验证码并完成光鸭云盘登录",
-                },
-            ]
-        )
+        apis.extend([
+            {
+                "path": "/login/sms/send",
+                "endpoint": self.send_sms_code,
+                "auth": "bear",
+                "methods": ["POST"],
+                "summary": "发送光鸭云盘短信验证码",
+            },
+            {
+                "path": "/login/sms/verify",
+                "endpoint": self.verify_sms_login,
+                "auth": "bear",
+                "methods": ["POST"],
+                "summary": "校验短信验证码并完成光鸭云盘登录",
+            },
+        ])
         return apis
 
     def send_sms_code(self, payload: dict) -> Dict[str, Any]:
@@ -49,10 +42,8 @@ class ShukGuangYaDisk(_LegacyPlugin):
         phone = str(payload.get("phone_number") or payload.get("phone") or "").strip()
         if not phone:
             return {"success": False, "stage": "moviepilot", "message": "请输入手机号"}
-
         if not self._client:
             from .guangya_client import GuangYaClient
-
             self._client = GuangYaClient(
                 access_token=None,
                 refresh_token=None,
@@ -60,7 +51,6 @@ class ShukGuangYaDisk(_LegacyPlugin):
                 device_id=self._device_id,
             )
             self._device_id = self._client.device_id
-
         result = self._client.request_sms_code(
             phone_number=phone,
             captcha_token=str(payload.get("captcha_token") or "").strip(),
@@ -73,41 +63,16 @@ class ShukGuangYaDisk(_LegacyPlugin):
 
     def verify_sms_login(self, payload: dict) -> Dict[str, Any]:
         payload = payload or {}
-        phone = str(
-            payload.get("phone_number")
-            or payload.get("phone")
-            or self._sms_phone_number
-            or ""
-        ).strip()
-        verification_id = str(
-            payload.get("verification_id") or self._sms_verification_id or ""
-        ).strip()
-        captcha_token = str(
-            payload.get("captcha_token") or self._sms_captcha_token or ""
-        ).strip()
-        code = str(
-            payload.get("verification_code") or payload.get("verify_code") or ""
-        ).strip()
-
+        phone = str(payload.get("phone_number") or payload.get("phone") or self._sms_phone_number or "").strip()
+        verification_id = str(payload.get("verification_id") or self._sms_verification_id or "").strip()
+        captcha_token = str(payload.get("captcha_token") or self._sms_captcha_token or "").strip()
+        code = str(payload.get("verification_code") or payload.get("verify_code") or "").strip()
         if not phone or not verification_id or not code:
-            return {
-                "success": False,
-                "stage": "moviepilot",
-                "message": "手机号、verification_id 和验证码不能为空",
-            }
+            return {"success": False, "stage": "moviepilot", "message": "手机号、verification_id 和验证码不能为空"}
         if not captcha_token:
-            return {
-                "success": False,
-                "stage": "moviepilot",
-                "message": "captcha_token 已丢失，请重新获取短信验证码",
-            }
+            return {"success": False, "stage": "moviepilot", "message": "captcha_token 已丢失，请重新获取短信验证码"}
         if not self._client:
-            return {
-                "success": False,
-                "stage": "moviepilot",
-                "message": "请先发送短信验证码",
-            }
-
+            return {"success": False, "stage": "moviepilot", "message": "请先发送短信验证码"}
         result = self._client.signin_by_sms(
             phone_number=phone,
             verification_id=verification_id,
@@ -116,7 +81,6 @@ class ShukGuangYaDisk(_LegacyPlugin):
         )
         if not result.get("success"):
             return result
-
         self._access_token = result.get("access_token") or ""
         self._refresh_token = result.get("refresh_token") or ""
         new_config = {
@@ -136,11 +100,7 @@ class ShukGuangYaDisk(_LegacyPlugin):
         self._sms_verification_id = ""
         self._sms_phone_number = ""
         self._sms_captcha_token = ""
-        return {
-            "success": True,
-            "message": "短信登录成功",
-            "device_id": self._device_id,
-        }
+        return {"success": True, "message": "短信登录成功", "device_id": self._device_id}
 
 
 __all__ = ["ShukGuangYaDisk"]
