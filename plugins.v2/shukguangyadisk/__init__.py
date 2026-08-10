@@ -1,7 +1,7 @@
-"""Shuk-光鸭云盘插件入口。
+"""光鸭云盘助手插件入口。
 
-主实现保留在 _plugin_legacy.py，本入口只补充当前 fork 的版本与短信认证能力。
-扫码登录直接沿用 KoWming 原实现；目录浏览、整理上传、下载、移动、复制、WebDAV 等存储能力继续沿用原实现。
+主实现保留在 _plugin_legacy.py，本入口补充当前 fork 的版本与短信认证能力。
+扫码登录沿用 KoWming 原实现；目录浏览、整理上传、下载、移动、复制、WebDAV 等存储能力继续沿用原实现。
 """
 
 import time
@@ -11,7 +11,9 @@ from ._plugin_legacy import ShukGuangYaDisk as _LegacyPlugin
 
 
 class ShukGuangYaDisk(_LegacyPlugin):
-    plugin_version = "2.2.13"
+    plugin_name = "光鸭云盘助手"
+    plugin_desc = "MoviePilot 光鸭云盘存储助手，支持扫码/短信登录、目录浏览、整理上传、下载、移动、复制和 Emby 直连。"
+    plugin_version = "2.2.14"
     plugin_author = "liheng-lk"
     author_url = "https://github.com/liheng-lk/Guangyadisk"
 
@@ -123,7 +125,6 @@ class ShukGuangYaDisk(_LegacyPlugin):
             return {"success": False, "message": "二维码已过期，请重新获取", "waiting": False, "stage": "expired"}
 
         from .guangya_client import GuangYaClient
-
         temp_client = GuangYaClient(
             access_token=None,
             refresh_token=None,
@@ -139,7 +140,6 @@ class ShukGuangYaDisk(_LegacyPlugin):
                 "waiting": True,
                 "stage": "authorization_pending",
             }
-
         if not result or not result.get("access_token"):
             return {
                 "success": False,
