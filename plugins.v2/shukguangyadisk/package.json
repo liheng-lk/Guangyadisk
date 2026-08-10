@@ -2,6 +2,10 @@
   "name": "moviepilot-guangya-cloud-assistant",
   "private": true,
   "version": "2.2.16",
+  "description": "MoviePilot 光鸭云盘助手",
+  "author": "liheng-lk",
+  "repository": "https://github.com/liheng-lk/Guangyadisk",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "vite build"
