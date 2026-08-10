@@ -1,13 +1,18 @@
 """光鸭云盘助手插件入口。
 
-主实现保留在 _plugin_legacy.py，本入口补充当前 fork 的版本、认证能力与紧凑配置表单。
-扫码登录沿用 KoWming 原实现；目录浏览、整理上传、下载、移动、复制、WebDAV 等存储能力继续沿用原实现。
+认证逻辑沿用已验证实现；存储名称统一为“光鸭云盘助手”，并提供可选上传进度监控。
 """
 
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+from app.db.systemconfig_oper import SystemConfigOper
+from app.helper.storage import StorageHelper
+from app.log import logger
+from app.schemas.types import SystemConfigKey
+
 from ._plugin_legacy import ShukGuangYaDisk as _LegacyPlugin
+from .guangya_client import GuangYaClient
 
 
 class ShukGuangYaDisk(_LegacyPlugin):
@@ -19,309 +24,57 @@ class ShukGuangYaDisk(_LegacyPlugin):
     plugin_author = "liheng-lk"
     author_url = "https://github.com/liheng-lk/Guangyadisk"
 
+    _disk_name = "光鸭云盘助手"
+    _legacy_disk_name = "Shuk-光鸭云盘"
+    _upload_progress_log: bool = False
+
     _sms_verification_id: str = ""
     _sms_phone_number: str = ""
     _sms_captcha_token: str = ""
 
+    def _migrate_storage_name(self) -> None:
+        """将旧存储名称迁移为当前插件名称，并清理重复项。"""
+        try:
+            storages = StorageHelper().get_storagies()
+            if not storages:
+                return
+            changed = False
+            new_exists = any(s.type == self._disk_name for s in storages)
+            migrated = []
+            for storage in storages:
+                if storage.type == self._legacy_disk_name:
+                    changed = True
+                    if new_exists:
+                        continue
+                    storage.type = self._disk_name
+                    storage.name = self._disk_name
+                    new_exists = True
+                elif storage.type == self._disk_name and storage.name != self._disk_name:
+                    storage.name = self._disk_name
+                    changed = True
+                migrated.append(storage)
+            if changed:
+                SystemConfigOper().set(
+                    SystemConfigKey.Storages,
+                    [item.model_dump() for item in migrated],
+                )
+                logger.info("【光鸭云盘助手】MoviePilot 存储名称已迁移为: %s", self._disk_name)
+        except Exception as err:
+            logger.warning("【光鸭云盘助手】迁移存储名称失败: %s", err)
+
+    def init_plugin(self, config: dict = None) -> None:
+        """初始化插件，并把上传日志开关同步到存储适配器。"""
+        config = config or {}
+        if "upload_progress_log" in config:
+            self._upload_progress_log = bool(config.get("upload_progress_log"))
+        self._migrate_storage_name()
+        super().init_plugin(config)
+        if self._guangya_api:
+            self._guangya_api.upload_progress_log = self._upload_progress_log
+
     def get_form(self) -> Tuple[Optional[List[dict]], Dict[str, Any]]:
-        """返回双栏紧凑配置表单。"""
-        form = [
-            {
-                "component": "VForm",
-                "content": [
-                    {
-                        "component": "VRow",
-                        "props": {"dense": True},
-                        "content": [
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "md": 8},
-                                "content": [
-                                    {
-                                        "component": "VCard",
-                                        "props": {"variant": "outlined", "class": "mb-3"},
-                                        "content": [
-                                            {
-                                                "component": "VCardTitle",
-                                                "props": {"class": "text-subtitle-1 font-weight-bold"},
-                                                "text": "运行配置"
-                                            },
-                                            {
-                                                "component": "VCardText",
-                                                "content": [
-                                                    {
-                                                        "component": "VRow",
-                                                        "content": [
-                                                            {
-                                                                "component": "VCol",
-                                                                "props": {"cols": 12, "sm": 6},
-                                                                "content": [
-                                                                    {
-                                                                        "component": "VSwitch",
-                                                                        "props": {
-                                                                            "model": "enabled",
-                                                                            "label": "启用光鸭云盘助手",
-                                                                            "color": "primary",
-                                                                            "density": "compact",
-                                                                            "hide-details": True
-                                                                        }
-                                                                    }
-                                                                ]
-                                                            },
-                                                            {
-                                                                "component": "VCol",
-                                                                "props": {"cols": 12, "sm": 6},
-                                                                "content": [
-                                                                    {
-                                                                        "component": "VSwitch",
-                                                                        "props": {
-                                                                            "model": "permanently_delete",
-                                                                            "label": "删除时彻底删除",
-                                                                            "color": "error",
-                                                                            "density": "compact",
-                                                                            "hide-details": True
-                                                                        }
-                                                                    }
-                                                                ]
-                                                            }
-                                                        ]
-                                                    },
-                                                    {
-                                                        "component": "VRow",
-                                                        "content": [
-                                                            {
-                                                                "component": "VCol",
-                                                                "props": {"cols": 12, "sm": 6},
-                                                                "content": [
-                                                                    {
-                                                                        "component": "VTextField",
-                                                                        "props": {
-                                                                            "model": "poll_interval",
-                                                                            "label": "轮询间隔（秒）",
-                                                                            "type": "number",
-                                                                            "min": 2,
-                                                                            "max": 30,
-                                                                            "density": "compact",
-                                                                            "variant": "outlined",
-                                                                            "hide-details": "auto"
-                                                                        }
-                                                                    }
-                                                                ]
-                                                            },
-                                                            {
-                                                                "component": "VCol",
-                                                                "props": {"cols": 12, "sm": 6},
-                                                                "content": [
-                                                                    {
-                                                                        "component": "VSelect",
-                                                                        "props": {
-                                                                            "model": "page_size",
-                                                                            "label": "分页大小",
-                                                                            "items": [50, 100, 200, 500],
-                                                                            "density": "compact",
-                                                                            "variant": "outlined",
-                                                                            "hide-details": "auto"
-                                                                        }
-                                                                    }
-                                                                ]
-                                                            }
-                                                        ]
-                                                    },
-                                                    {
-                                                        "component": "VRow",
-                                                        "content": [
-                                                            {
-                                                                "component": "VCol",
-                                                                "props": {"cols": 12, "sm": 6},
-                                                                "content": [
-                                                                    {
-                                                                        "component": "VSelect",
-                                                                        "props": {
-                                                                            "model": "order_by",
-                                                                            "label": "排序字段",
-                                                                            "items": [
-                                                                                {"title": "名称", "value": 1},
-                                                                                {"title": "大小", "value": 2},
-                                                                                {"title": "更新时间", "value": 3}
-                                                                            ],
-                                                                            "density": "compact",
-                                                                            "variant": "outlined",
-                                                                            "hide-details": "auto"
-                                                                        }
-                                                                    }
-                                                                ]
-                                                            },
-                                                            {
-                                                                "component": "VCol",
-                                                                "props": {"cols": 12, "sm": 6},
-                                                                "content": [
-                                                                    {
-                                                                        "component": "VSelect",
-                                                                        "props": {
-                                                                            "model": "sort_type",
-                                                                            "label": "排序方向",
-                                                                            "items": [
-                                                                                {"title": "升序", "value": 1},
-                                                                                {"title": "降序", "value": 2}
-                                                                            ],
-                                                                            "density": "compact",
-                                                                            "variant": "outlined",
-                                                                            "hide-details": "auto"
-                                                                        }
-                                                                    }
-                                                                ]
-                                                            }
-                                                        ]
-                                                    }
-                                                ]
-                                            }
-                                        ]
-                                    },
-                                    {
-                                        "component": "VCard",
-                                        "props": {"variant": "outlined"},
-                                        "content": [
-                                            {
-                                                "component": "VCardTitle",
-                                                "props": {"class": "text-subtitle-1 font-weight-bold"},
-                                                "text": "高级参数"
-                                            },
-                                            {
-                                                "component": "VCardText",
-                                                "content": [
-                                                    {
-                                                        "component": "VRow",
-                                                        "content": [
-                                                            {
-                                                                "component": "VCol",
-                                                                "props": {"cols": 12, "sm": 6},
-                                                                "content": [
-                                                                    {
-                                                                        "component": "VTextField",
-                                                                        "props": {
-                                                                            "model": "client_id",
-                                                                            "label": "Client ID",
-                                                                            "density": "compact",
-                                                                            "variant": "outlined",
-                                                                            "readonly": True,
-                                                                            "hide-details": "auto"
-                                                                        }
-                                                                    }
-                                                                ]
-                                                            },
-                                                            {
-                                                                "component": "VCol",
-                                                                "props": {"cols": 12, "sm": 6},
-                                                                "content": [
-                                                                    {
-                                                                        "component": "VTextField",
-                                                                        "props": {
-                                                                            "model": "device_id",
-                                                                            "label": "设备 ID",
-                                                                            "density": "compact",
-                                                                            "variant": "outlined",
-                                                                            "readonly": True,
-                                                                            "hide-details": "auto"
-                                                                        }
-                                                                    }
-                                                                ]
-                                                            }
-                                                        ]
-                                                    }
-                                                ]
-                                            }
-                                        ]
-                                    }
-                                ]
-                            },
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "md": 4},
-                                "content": [
-                                    {
-                                        "component": "VCard",
-                                        "props": {"variant": "outlined", "class": "mb-3"},
-                                        "content": [
-                                            {
-                                                "component": "VCardTitle",
-                                                "props": {"class": "text-subtitle-1 font-weight-bold"},
-                                                "text": "账号会话"
-                                            },
-                                            {
-                                                "component": "VCardText",
-                                                "content": [
-                                                    {
-                                                        "component": "VAlert",
-                                                        "props": {
-                                                            "type": "info",
-                                                            "variant": "tonal",
-                                                            "density": "compact",
-                                                            "text": "扫码或短信登录请在“状态页”完成。Token 会自动保存和刷新，设置页无需手工维护。"
-                                                        }
-                                                    },
-                                                    {
-                                                        "component": "VTextField",
-                                                        "props": {
-                                                            "model": "access_token",
-                                                            "label": "Access Token",
-                                                            "type": "password",
-                                                            "density": "compact",
-                                                            "variant": "outlined",
-                                                            "readonly": True,
-                                                            "hide-details": "auto",
-                                                            "class": "mt-3"
-                                                        }
-                                                    },
-                                                    {
-                                                        "component": "VTextField",
-                                                        "props": {
-                                                            "model": "refresh_token",
-                                                            "label": "Refresh Token",
-                                                            "type": "password",
-                                                            "density": "compact",
-                                                            "variant": "outlined",
-                                                            "readonly": True,
-                                                            "hide-details": "auto",
-                                                            "class": "mt-3"
-                                                        }
-                                                    }
-                                                ]
-                                            }
-                                        ]
-                                    },
-                                    {
-                                        "component": "VCard",
-                                        "props": {"variant": "outlined"},
-                                        "content": [
-                                            {
-                                                "component": "VCardTitle",
-                                                "props": {"class": "text-subtitle-1 font-weight-bold"},
-                                                "text": "使用建议"
-                                            },
-                                            {
-                                                "component": "VCardText",
-                                                "content": [
-                                                    {
-                                                        "component": "VAlert",
-                                                        "props": {
-                                                            "type": "success",
-                                                            "variant": "tonal",
-                                                            "density": "compact",
-                                                            "text": "常规使用保持默认参数即可。轮询间隔建议 5–10 秒，分页大小建议 100；只有目录特别大时再调高分页。"
-                                                        }
-                                                    }
-                                                ]
-                                            }
-                                        ]
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
-        ]
-        config = {
+        """Vue Federation 模式下仅提供初始配置。"""
+        return None, {
             "enabled": self._enabled,
             "access_token": self._access_token,
             "refresh_token": self._refresh_token,
@@ -332,8 +85,44 @@ class ShukGuangYaDisk(_LegacyPlugin):
             "order_by": self._order_by or 3,
             "sort_type": self._sort_type or 1,
             "permanently_delete": self._permanently_delete,
+            "upload_progress_log": self._upload_progress_log,
         }
-        return form, config
+
+    def _get_config(self) -> Dict[str, Any]:
+        """读取配置，并补充上传监控与当前存储名称。"""
+        data = super()._get_config()
+        data["upload_progress_log"] = self._upload_progress_log
+        data["storage_name"] = self._disk_name
+        return data
+
+    def _save_config(self, config_payload: dict) -> Dict[str, Any]:
+        """保存配置，包括上传进度监控开关。"""
+        try:
+            config_payload = config_payload or {}
+            sort_type_value = config_payload.get("sort_type")
+            new_config = {
+                "enabled": bool(config_payload.get("enabled", self._enabled)),
+                "access_token": (config_payload.get("access_token") or self._access_token or "").strip(),
+                "refresh_token": (config_payload.get("refresh_token") or self._refresh_token or "").strip(),
+                "client_id": (
+                    (config_payload.get("client_id") or self._client_id or GuangYaClient.DEFAULT_CLIENT_ID).strip()
+                    or GuangYaClient.DEFAULT_CLIENT_ID
+                ),
+                "device_id": (config_payload.get("device_id") or self._device_id or "").strip(),
+                "poll_interval": int(config_payload.get("poll_interval") or self._poll_interval or 5),
+                "page_size": int(config_payload.get("page_size") or self._page_size or 100),
+                "order_by": int(config_payload.get("order_by") or self._order_by or 3),
+                "sort_type": int(self._sort_type if sort_type_value is None else sort_type_value),
+                "permanently_delete": bool(config_payload.get("permanently_delete", self._permanently_delete)),
+                "upload_progress_log": bool(config_payload.get("upload_progress_log", self._upload_progress_log)),
+            }
+            self._upload_progress_log = new_config["upload_progress_log"]
+            self.update_config(new_config)
+            self.init_plugin(new_config)
+            return {"success": True, "message": "配置保存成功", "data": self._get_config()}
+        except Exception as err:
+            logger.error("【光鸭云盘助手】保存配置失败: %s", err)
+            return {"success": False, "message": f"保存配置失败: {err}"}
 
     def get_api(self) -> List[Dict[str, Any]]:
         """返回插件 API。"""
@@ -370,6 +159,7 @@ class ShukGuangYaDisk(_LegacyPlugin):
             "order_by": self._order_by,
             "sort_type": self._sort_type,
             "permanently_delete": self._permanently_delete,
+            "upload_progress_log": self._upload_progress_log,
         }
         self.update_config(config)
         self.init_plugin(config)
@@ -381,7 +171,6 @@ class ShukGuangYaDisk(_LegacyPlugin):
         if not phone:
             return {"success": False, "stage": "moviepilot", "message": "请输入手机号"}
         if not self._client:
-            from .guangya_client import GuangYaClient
             self._client = GuangYaClient(
                 access_token=None,
                 refresh_token=None,
@@ -425,7 +214,6 @@ class ShukGuangYaDisk(_LegacyPlugin):
         self._access_token = result.get("access_token") or ""
         self._refresh_token = result.get("refresh_token") or ""
         self._activate_storage_after_login()
-
         self._sms_verification_id = ""
         self._sms_phone_number = ""
         self._sms_captcha_token = ""
@@ -443,7 +231,6 @@ class ShukGuangYaDisk(_LegacyPlugin):
         if self._qr_expires_at and time.time() > self._qr_expires_at:
             return {"success": False, "message": "二维码已过期，请重新获取", "waiting": False, "stage": "expired"}
 
-        from .guangya_client import GuangYaClient
         temp_client = GuangYaClient(
             access_token=None,
             refresh_token=None,
@@ -451,7 +238,6 @@ class ShukGuangYaDisk(_LegacyPlugin):
             device_id=self._device_id,
         )
         result = temp_client.poll_device_code(self._device_code)
-
         if result and result.get("waiting"):
             return {
                 "success": False,
@@ -477,7 +263,6 @@ class ShukGuangYaDisk(_LegacyPlugin):
         self._user_code = ""
         self._verification_uri = ""
         self._qr_expires_at = 0
-
         return {
             "success": True,
             "message": "扫码登录成功，登录信息已保存",
