@@ -1,7 +1,7 @@
 """光鸭云盘 HTTP 客户端兼容层。
 
-文件 API 继续复用原实现；认证流程参考 DDSRem-Dev/guangyaclient 当前实现，
-提供扫码授权与手机号短信验证码登录。
+文件 API 继续复用原实现；扫码登录严格沿用 KoWming 当前可用实现，
+短信登录参考 DDSRem-Dev/guangyaclient 当前实现。
 """
 
 from secrets import token_hex
@@ -14,7 +14,6 @@ class GuangYaClient(_LegacyGuangYaClient):
     """在原客户端之上补充当前认证流程。"""
 
     def _account_web_headers(self) -> Dict[str, str]:
-        """构造与当前光鸭 Web 账号认证一致的请求头。"""
         return {
             "Accept": "*/*",
             "Content-Type": "application/json",
@@ -39,96 +38,49 @@ class GuangYaClient(_LegacyGuangYaClient):
             "X-SDK-Version": "9.0.2",
         }
 
-    @staticmethod
-    def _valid_device_code_result(result: Dict[str, Any]) -> bool:
-        if not isinstance(result, dict):
-            return False
-        data = result.get("data") if isinstance(result.get("data"), dict) else result
-        return bool(
-            data.get("device_code")
-            and (data.get("verification_uri_complete") or data.get("verification_uri"))
-        )
-
     def get_device_code(self) -> Optional[Dict[str, Any]]:
-        """获取扫码授权设备码。
-
-        扫码接口并不属于 guangyaclient 的短信登录实现，因此保留兼容探测逻辑。
-        """
-        request_bodies = [
-            {
+        """获取设备码与二维码：严格沿用 KoWming 当前可用实现。"""
+        result = self._request(
+            method="POST",
+            url=f"{self.ACCOUNT_BASE_URL}/v1/auth/device/code",
+            data={
+                "scope": "user",
                 "client_id": self._client_id,
-                "device_id": self._device_id,
-                "scope": "user profile sso offline_access",
             },
-            {"client_id": self._client_id},
-            {"client_id": self._client_id, "scope": "all"},
-        ]
-        last_result: Dict[str, Any] = {}
-        for body in request_bodies:
-            result = self._request(
-                method="POST",
-                url=f"{self.ACCOUNT_BASE_URL}/v1/auth/device/code",
-                data=body,
-                headers=self._account_web_headers(),
-                need_auth=False,
-                treat_http_error_as_response=True,
-            ) or {}
-            last_result = result if isinstance(result, dict) else {}
-            if self._valid_device_code_result(last_result):
-                data = (
-                    last_result.get("data")
-                    if isinstance(last_result.get("data"), dict)
-                    else last_result
-                )
-                return data
-        return last_result or None
+            need_auth=False,
+        )
+        if result.get("error"):
+            return None
+        return result
 
     def poll_device_code(self, device_code: str) -> Optional[Dict[str, Any]]:
-        """轮询扫码授权状态并获取 access_token / refresh_token。"""
-        body = {
-            "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
-            "device_code": device_code,
-            "client_id": self._client_id,
-        }
-        endpoints = ["/v1/auth/token", "/v1/auth/device/token"]
-        last_result: Dict[str, Any] = {}
-        for endpoint in endpoints:
-            result = self._request(
-                method="POST",
-                url=f"{self.ACCOUNT_BASE_URL}{endpoint}",
-                data=body,
-                headers=self._account_web_headers(),
-                need_auth=False,
-                treat_http_error_as_response=True,
-            ) or {}
-            if isinstance(result.get("data"), dict) and result.get("data"):
-                result = result.get("data")
-            last_result = result if isinstance(result, dict) else {}
-            error = str(last_result.get("error") or "")
-            if last_result.get("access_token"):
-                self._access_token = last_result.get("access_token") or ""
-                self._refresh_token = last_result.get("refresh_token") or ""
-                if self._on_token_refresh:
-                    try:
-                        self._on_token_refresh(self._access_token, self._refresh_token)
-                    except Exception:
-                        pass
-                return last_result
-            if error in ("authorization_pending", "slow_down", ""):
-                return {
-                    "waiting": True,
-                    "slow_down": error == "slow_down",
-                    "message": "等待扫码确认..." if error != "slow_down" else "轮询过快，稍后继续...",
-                }
-            if error == "expired_token":
-                return {"expired": True, "message": "二维码已过期，请重新获取"}
-            if error == "access_denied":
-                return {"denied": True, "message": "授权已取消，请重新扫码"}
-        return last_result or None
+        """轮询设备码状态：严格沿用 KoWming 当前可用实现。"""
+        result = self._request(
+            method="POST",
+            url=f"{self.ACCOUNT_BASE_URL}/v1/auth/token",
+            data={
+                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                "device_code": device_code,
+                "client_id": self._client_id,
+            },
+            need_auth=False,
+            treat_http_error_as_response=True,
+        )
+        if result.get("error") == "authorization_pending":
+            return {"waiting": True, "message": "等待扫码中..."}
+        if result.get("access_token"):
+            self._access_token = result.get("access_token") or ""
+            self._refresh_token = result.get("refresh_token") or ""
+            if self._on_token_refresh:
+                try:
+                    self._on_token_refresh(self._access_token, self._refresh_token)
+                except Exception:
+                    pass
+            return result
+        return None
 
     @staticmethod
     def _normalize_phone(phone: str) -> str:
-        """按 guangyaclient 示例规范化大陆手机号为 '+86 138...'。"""
         value = str(phone or "").strip()
         if not value:
             return ""
@@ -141,7 +93,6 @@ class GuangYaClient(_LegacyGuangYaClient):
         return value
 
     def login_sms_init(self, phone_number: str, captcha_token: Optional[str] = None) -> Dict[str, Any]:
-        """短信登录步骤 1：初始化 captcha。"""
         phone = self._normalize_phone(phone_number)
         body: Dict[str, Any] = {
             "client_id": self._client_id,
@@ -160,13 +111,7 @@ class GuangYaClient(_LegacyGuangYaClient):
             treat_http_error_as_response=True,
         ) or {}
 
-    def login_sms_send(
-        self,
-        phone_number: str,
-        captcha_token: str,
-        target: str = "ANY",
-    ) -> Dict[str, Any]:
-        """短信登录步骤 2：发送短信验证码。"""
+    def login_sms_send(self, phone_number: str, captcha_token: str, target: str = "ANY") -> Dict[str, Any]:
         phone = self._normalize_phone(phone_number)
         headers = self._account_web_headers()
         headers["X-Captcha-Token"] = captcha_token
@@ -184,7 +129,6 @@ class GuangYaClient(_LegacyGuangYaClient):
         ) or {}
 
     def login_sms_verify(self, verification_id: str, verification_code: str) -> Dict[str, Any]:
-        """短信登录步骤 3：验证短信验证码。"""
         return self._request(
             method="POST",
             url=f"{self.ACCOUNT_BASE_URL}/v1/auth/verification/verify",
@@ -205,7 +149,6 @@ class GuangYaClient(_LegacyGuangYaClient):
         username: str,
         captcha_token: str,
     ) -> Dict[str, Any]:
-        """短信登录步骤 4：完成登录并取得 access/refresh token。"""
         phone = self._normalize_phone(username)
         headers = self._account_web_headers()
         headers["X-Captcha-Token"] = captcha_token
@@ -234,7 +177,6 @@ class GuangYaClient(_LegacyGuangYaClient):
         return result
 
     def request_sms_code(self, phone_number: str, captcha_token: str = "") -> Dict[str, Any]:
-        """面向 MoviePilot 的两阶段短信登录：先初始化 captcha，再发送验证码。"""
         phone = self._normalize_phone(phone_number)
         captcha = str(captcha_token or "").strip()
         if not captcha:
@@ -292,7 +234,6 @@ class GuangYaClient(_LegacyGuangYaClient):
         verification_code: str,
         captcha_token: str,
     ) -> Dict[str, Any]:
-        """面向 MoviePilot 的短信登录完成步骤。"""
         phone = self._normalize_phone(phone_number)
         code = str(verification_code or "").strip()
         verify_result = self.login_sms_verify(verification_id, code)
