@@ -1,0 +1,1 @@
+Current authentication migration notes will be documented after SMS backend validation.
