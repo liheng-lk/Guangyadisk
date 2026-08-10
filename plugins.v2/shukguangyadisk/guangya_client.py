@@ -4,14 +4,118 @@
 短信登录参考 DDSRem-Dev/guangyaclient 当前实现。
 """
 
+import time
 from secrets import token_hex
 from typing import Any, Dict, Optional
+
+from app.log import logger
 
 from .guangya_client_legacy import GuangYaClient as _LegacyGuangYaClient
 
 
 class GuangYaClient(_LegacyGuangYaClient):
-    """在原客户端之上补充当前认证流程。"""
+    """在原客户端之上补充当前认证流程与临时网络故障重试。"""
+
+    _TRANSIENT_NETWORK_MARKERS = (
+        "NameResolutionError",
+        "Temporary failure in name resolution",
+        "Failed to resolve",
+        "ConnectionError",
+        "Connection aborted",
+        "Connection reset",
+        "Read timed out",
+        "ConnectTimeout",
+        "ReadTimeout",
+        "Max retries exceeded",
+    )
+
+    @classmethod
+    def _is_transient_network_result(cls, result: Any) -> bool:
+        if not isinstance(result, dict):
+            return False
+        if result.get("code") not in (-1, None) and not result.get("error"):
+            return False
+        text = str(result.get("error") or result.get("msg") or result)
+        return any(marker.lower() in text.lower() for marker in cls._TRANSIENT_NETWORK_MARKERS)
+
+    def _request(self, *args, **kwargs) -> Dict[str, Any]:
+        """对 legacy HTTP 请求增加临时 DNS/连接故障重试。"""
+        max_attempts = 3
+        last_result: Dict[str, Any] = {}
+        url = kwargs.get("url") or (args[1] if len(args) > 1 else "")
+        for attempt in range(1, max_attempts + 1):
+            last_result = super()._request(*args, **kwargs)
+            if not self._is_transient_network_result(last_result):
+                return last_result
+            if attempt >= max_attempts:
+                break
+            delay = 2 ** (attempt - 1)
+            logger.warning(
+                "【光鸭云盘助手】【网络】临时网络/DNS异常，第 %s/%s 次请求失败，%ss 后重试: %s",
+                attempt,
+                max_attempts,
+                delay,
+                url,
+            )
+            time.sleep(delay)
+        return last_result
+
+    def upload_file_multipart(
+        self,
+        endpoint: str,
+        bucket_name: str,
+        object_path: str,
+        file_path: str,
+        oss_access_key_id: str,
+        oss_access_key_secret: str,
+        security_token: str,
+        progress_callback=None,
+    ):
+        """对 OSS 可续传上传增加临时 DNS/连接故障重试。"""
+        max_attempts = 5
+        last_result = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                last_result = super().upload_file_multipart(
+                    endpoint=endpoint,
+                    bucket_name=bucket_name,
+                    object_path=object_path,
+                    file_path=file_path,
+                    oss_access_key_id=oss_access_key_id,
+                    oss_access_key_secret=oss_access_key_secret,
+                    security_token=security_token,
+                    progress_callback=progress_callback,
+                )
+                if last_result:
+                    if attempt > 1:
+                        logger.info(
+                            "【光鸭云盘助手】【上传】OSS 重试成功，第 %s 次完成: %s",
+                            attempt,
+                            object_path,
+                        )
+                    return last_result
+            except Exception as err:
+                logger.warning(
+                    "【光鸭云盘助手】【上传】OSS 上传异常，第 %s/%s 次: %s",
+                    attempt,
+                    max_attempts,
+                    err,
+                )
+            if attempt < max_attempts:
+                delay = min(2 ** (attempt - 1), 8)
+                logger.warning(
+                    "【光鸭云盘助手】【上传】OSS 上传未完成，%ss 后重试，第 %s/%s 次",
+                    delay,
+                    attempt + 1,
+                    max_attempts,
+                )
+                time.sleep(delay)
+        logger.error(
+            "【光鸭云盘助手】【上传】OSS 重试 %s 次仍失败: %s",
+            max_attempts,
+            object_path,
+        )
+        return last_result
 
     def _account_web_headers(self) -> Dict[str, str]:
         return {
