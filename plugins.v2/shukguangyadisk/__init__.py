@@ -24,211 +24,295 @@ class ShukGuangYaDisk(_LegacyPlugin):
     _sms_captcha_token: str = ""
 
     def get_form(self) -> Tuple[Optional[List[dict]], Dict[str, Any]]:
-        """返回与助手主页一致的紧凑配置表单。"""
+        """返回双栏紧凑配置表单。"""
         form = [
             {
                 "component": "VForm",
                 "content": [
                     {
-                        "component": "VAlert",
-                        "props": {
-                            "type": "info",
-                            "variant": "tonal",
-                            "density": "compact",
-                            "text": "账号登录与 Token 由插件主页自动管理。一般只需启用插件并保持默认参数；扫码或短信登录请返回“光鸭云盘助手”主页完成。"
-                        }
-                    },
-                    {
                         "component": "VRow",
-                        "props": {"class": "mt-2"},
+                        "props": {"dense": True},
                         "content": [
                             {
                                 "component": "VCol",
-                                "props": {"cols": 12, "md": 6},
+                                "props": {"cols": 12, "md": 8},
                                 "content": [
                                     {
-                                        "component": "VSwitch",
-                                        "props": {
-                                            "model": "enabled",
-                                            "label": "启用光鸭云盘助手",
-                                            "color": "primary",
-                                            "density": "compact",
-                                            "hide-details": True
-                                        }
+                                        "component": "VCard",
+                                        "props": {"variant": "outlined", "class": "mb-3"},
+                                        "content": [
+                                            {
+                                                "component": "VCardTitle",
+                                                "props": {"class": "text-subtitle-1 font-weight-bold"},
+                                                "text": "运行配置"
+                                            },
+                                            {
+                                                "component": "VCardText",
+                                                "content": [
+                                                    {
+                                                        "component": "VRow",
+                                                        "content": [
+                                                            {
+                                                                "component": "VCol",
+                                                                "props": {"cols": 12, "sm": 6},
+                                                                "content": [
+                                                                    {
+                                                                        "component": "VSwitch",
+                                                                        "props": {
+                                                                            "model": "enabled",
+                                                                            "label": "启用光鸭云盘助手",
+                                                                            "color": "primary",
+                                                                            "density": "compact",
+                                                                            "hide-details": True
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            {
+                                                                "component": "VCol",
+                                                                "props": {"cols": 12, "sm": 6},
+                                                                "content": [
+                                                                    {
+                                                                        "component": "VSwitch",
+                                                                        "props": {
+                                                                            "model": "permanently_delete",
+                                                                            "label": "删除时彻底删除",
+                                                                            "color": "error",
+                                                                            "density": "compact",
+                                                                            "hide-details": True
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    {
+                                                        "component": "VRow",
+                                                        "content": [
+                                                            {
+                                                                "component": "VCol",
+                                                                "props": {"cols": 12, "sm": 6},
+                                                                "content": [
+                                                                    {
+                                                                        "component": "VTextField",
+                                                                        "props": {
+                                                                            "model": "poll_interval",
+                                                                            "label": "轮询间隔（秒）",
+                                                                            "type": "number",
+                                                                            "min": 2,
+                                                                            "max": 30,
+                                                                            "density": "compact",
+                                                                            "variant": "outlined",
+                                                                            "hide-details": "auto"
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            {
+                                                                "component": "VCol",
+                                                                "props": {"cols": 12, "sm": 6},
+                                                                "content": [
+                                                                    {
+                                                                        "component": "VSelect",
+                                                                        "props": {
+                                                                            "model": "page_size",
+                                                                            "label": "分页大小",
+                                                                            "items": [50, 100, 200, 500],
+                                                                            "density": "compact",
+                                                                            "variant": "outlined",
+                                                                            "hide-details": "auto"
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    {
+                                                        "component": "VRow",
+                                                        "content": [
+                                                            {
+                                                                "component": "VCol",
+                                                                "props": {"cols": 12, "sm": 6},
+                                                                "content": [
+                                                                    {
+                                                                        "component": "VSelect",
+                                                                        "props": {
+                                                                            "model": "order_by",
+                                                                            "label": "排序字段",
+                                                                            "items": [
+                                                                                {"title": "名称", "value": 1},
+                                                                                {"title": "大小", "value": 2},
+                                                                                {"title": "更新时间", "value": 3}
+                                                                            ],
+                                                                            "density": "compact",
+                                                                            "variant": "outlined",
+                                                                            "hide-details": "auto"
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            {
+                                                                "component": "VCol",
+                                                                "props": {"cols": 12, "sm": 6},
+                                                                "content": [
+                                                                    {
+                                                                        "component": "VSelect",
+                                                                        "props": {
+                                                                            "model": "sort_type",
+                                                                            "label": "排序方向",
+                                                                            "items": [
+                                                                                {"title": "升序", "value": 1},
+                                                                                {"title": "降序", "value": 2}
+                                                                            ],
+                                                                            "density": "compact",
+                                                                            "variant": "outlined",
+                                                                            "hide-details": "auto"
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "component": "VCard",
+                                        "props": {"variant": "outlined"},
+                                        "content": [
+                                            {
+                                                "component": "VCardTitle",
+                                                "props": {"class": "text-subtitle-1 font-weight-bold"},
+                                                "text": "高级参数"
+                                            },
+                                            {
+                                                "component": "VCardText",
+                                                "content": [
+                                                    {
+                                                        "component": "VRow",
+                                                        "content": [
+                                                            {
+                                                                "component": "VCol",
+                                                                "props": {"cols": 12, "sm": 6},
+                                                                "content": [
+                                                                    {
+                                                                        "component": "VTextField",
+                                                                        "props": {
+                                                                            "model": "client_id",
+                                                                            "label": "Client ID",
+                                                                            "density": "compact",
+                                                                            "variant": "outlined",
+                                                                            "readonly": True,
+                                                                            "hide-details": "auto"
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            {
+                                                                "component": "VCol",
+                                                                "props": {"cols": 12, "sm": 6},
+                                                                "content": [
+                                                                    {
+                                                                        "component": "VTextField",
+                                                                        "props": {
+                                                                            "model": "device_id",
+                                                                            "label": "设备 ID",
+                                                                            "density": "compact",
+                                                                            "variant": "outlined",
+                                                                            "readonly": True,
+                                                                            "hide-details": "auto"
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
                                     }
                                 ]
                             },
                             {
                                 "component": "VCol",
-                                "props": {"cols": 12, "md": 6},
+                                "props": {"cols": 12, "md": 4},
                                 "content": [
                                     {
-                                        "component": "VSwitch",
-                                        "props": {
-                                            "model": "permanently_delete",
-                                            "label": "删除时彻底删除",
-                                            "color": "error",
-                                            "density": "compact",
-                                            "hide-details": True
-                                        }
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        "component": "VRow",
-                        "content": [
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "sm": 4},
-                                "content": [
+                                        "component": "VCard",
+                                        "props": {"variant": "outlined", "class": "mb-3"},
+                                        "content": [
+                                            {
+                                                "component": "VCardTitle",
+                                                "props": {"class": "text-subtitle-1 font-weight-bold"},
+                                                "text": "账号会话"
+                                            },
+                                            {
+                                                "component": "VCardText",
+                                                "content": [
+                                                    {
+                                                        "component": "VAlert",
+                                                        "props": {
+                                                            "type": "info",
+                                                            "variant": "tonal",
+                                                            "density": "compact",
+                                                            "text": "扫码或短信登录请在“状态页”完成。Token 会自动保存和刷新，设置页无需手工维护。"
+                                                        }
+                                                    },
+                                                    {
+                                                        "component": "VTextField",
+                                                        "props": {
+                                                            "model": "access_token",
+                                                            "label": "Access Token",
+                                                            "type": "password",
+                                                            "density": "compact",
+                                                            "variant": "outlined",
+                                                            "readonly": True,
+                                                            "hide-details": "auto",
+                                                            "class": "mt-3"
+                                                        }
+                                                    },
+                                                    {
+                                                        "component": "VTextField",
+                                                        "props": {
+                                                            "model": "refresh_token",
+                                                            "label": "Refresh Token",
+                                                            "type": "password",
+                                                            "density": "compact",
+                                                            "variant": "outlined",
+                                                            "readonly": True,
+                                                            "hide-details": "auto",
+                                                            "class": "mt-3"
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
                                     {
-                                        "component": "VTextField",
-                                        "props": {
-                                            "model": "poll_interval",
-                                            "label": "轮询间隔（秒）",
-                                            "type": "number",
-                                            "min": 2,
-                                            "max": 30,
-                                            "density": "compact",
-                                            "variant": "outlined",
-                                            "hide-details": "auto"
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "sm": 4},
-                                "content": [
-                                    {
-                                        "component": "VSelect",
-                                        "props": {
-                                            "model": "page_size",
-                                            "label": "分页大小",
-                                            "items": [50, 100, 200, 500],
-                                            "density": "compact",
-                                            "variant": "outlined",
-                                            "hide-details": "auto"
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "sm": 4},
-                                "content": [
-                                    {
-                                        "component": "VSelect",
-                                        "props": {
-                                            "model": "sort_type",
-                                            "label": "排序方向",
-                                            "items": [
-                                                {"title": "升序", "value": 1},
-                                                {"title": "降序", "value": 2}
-                                            ],
-                                            "density": "compact",
-                                            "variant": "outlined",
-                                            "hide-details": "auto"
-                                        }
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        "component": "VRow",
-                        "content": [
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "sm": 6},
-                                "content": [
-                                    {
-                                        "component": "VSelect",
-                                        "props": {
-                                            "model": "order_by",
-                                            "label": "排序字段",
-                                            "items": [
-                                                {"title": "名称", "value": 1},
-                                                {"title": "大小", "value": 2},
-                                                {"title": "更新时间", "value": 3}
-                                            ],
-                                            "density": "compact",
-                                            "variant": "outlined",
-                                            "hide-details": "auto"
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "sm": 6},
-                                "content": [
-                                    {
-                                        "component": "VTextField",
-                                        "props": {
-                                            "model": "client_id",
-                                            "label": "Client ID",
-                                            "density": "compact",
-                                            "variant": "outlined",
-                                            "readonly": True,
-                                            "hide-details": "auto"
-                                        }
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        "component": "VTextField",
-                        "props": {
-                            "model": "device_id",
-                            "label": "设备 ID",
-                            "density": "compact",
-                            "variant": "outlined",
-                            "readonly": True,
-                            "hint": "由插件自动生成并用于维持登录会话，无需手动修改。",
-                            "persistent-hint": True
-                        }
-                    },
-                    {
-                        "component": "VRow",
-                        "props": {"class": "mt-1"},
-                        "content": [
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "md": 6},
-                                "content": [
-                                    {
-                                        "component": "VTextField",
-                                        "props": {
-                                            "model": "access_token",
-                                            "label": "Access Token（自动管理）",
-                                            "type": "password",
-                                            "density": "compact",
-                                            "variant": "outlined",
-                                            "readonly": True,
-                                            "hide-details": "auto"
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "md": 6},
-                                "content": [
-                                    {
-                                        "component": "VTextField",
-                                        "props": {
-                                            "model": "refresh_token",
-                                            "label": "Refresh Token（自动管理）",
-                                            "type": "password",
-                                            "density": "compact",
-                                            "variant": "outlined",
-                                            "readonly": True,
-                                            "hide-details": "auto"
-                                        }
+                                        "component": "VCard",
+                                        "props": {"variant": "outlined"},
+                                        "content": [
+                                            {
+                                                "component": "VCardTitle",
+                                                "props": {"class": "text-subtitle-1 font-weight-bold"},
+                                                "text": "使用建议"
+                                            },
+                                            {
+                                                "component": "VCardText",
+                                                "content": [
+                                                    {
+                                                        "component": "VAlert",
+                                                        "props": {
+                                                            "type": "success",
+                                                            "variant": "tonal",
+                                                            "density": "compact",
+                                                            "text": "常规使用保持默认参数即可。轮询间隔建议 5–10 秒，分页大小建议 100；只有目录特别大时再调高分页。"
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
                                     }
                                 ]
                             }
