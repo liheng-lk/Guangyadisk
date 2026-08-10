@@ -1,6 +1,7 @@
 """光鸭云盘助手插件入口。
 
 认证逻辑沿用已验证实现；存储名称统一为“光鸭云盘助手”，并提供可选上传进度监控。
+同时在入口层统一 legacy 模块日志前缀，避免旧名称混杂。
 """
 
 import time
@@ -8,11 +9,66 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from app.db.systemconfig_oper import SystemConfigOper
 from app.helper.storage import StorageHelper
-from app.log import logger
+from app.log import logger as _base_logger
 from app.schemas.types import SystemConfigKey
 
+from . import _plugin_legacy as _plugin_legacy_module
+from . import guangya_api as _guangya_api_module
+from . import guangya_api_legacy as _guangya_api_legacy_module
+from . import guangya_client as _guangya_client_module
+from . import guangya_client_legacy as _guangya_client_legacy_module
+from . import webdav_provider as _webdav_provider_module
 from ._plugin_legacy import ShukGuangYaDisk as _LegacyPlugin
 from .guangya_client import GuangYaClient
+
+
+class _UnifiedLogPrefixAdapter:
+    """在不改动 legacy 核心实现的情况下统一用户可见日志名称。"""
+
+    _replacements = (
+        ("【Shuk-光鸭云盘】", "【光鸭云盘助手】"),
+        ("【光鸭云盘】", "【光鸭云盘助手】"),
+        ("【WebDAV】", "【光鸭云盘助手】【WebDAV】"),
+    )
+
+    def __init__(self, base_logger):
+        self._base_logger = base_logger
+
+    @classmethod
+    def _rewrite(cls, message):
+        if not isinstance(message, str):
+            return message
+        result = message
+        for old, new in cls._replacements:
+            result = result.replace(old, new)
+        return result
+
+    def __getattr__(self, name):
+        attr = getattr(self._base_logger, name)
+        if not callable(attr):
+            return attr
+
+        def _wrapped(message=None, *args, **kwargs):
+            if message is None:
+                return attr(*args, **kwargs)
+            return attr(self._rewrite(message), *args, **kwargs)
+
+        return _wrapped
+
+
+logger = _UnifiedLogPrefixAdapter(_base_logger)
+
+# legacy 模块仍保留原实现，只把其模块级 logger 替换为统一前缀适配器。
+for _module in (
+    _plugin_legacy_module,
+    _guangya_api_module,
+    _guangya_api_legacy_module,
+    _guangya_client_module,
+    _guangya_client_legacy_module,
+    _webdav_provider_module,
+):
+    if hasattr(_module, "logger"):
+        _module.logger = logger
 
 
 class ShukGuangYaDisk(_LegacyPlugin):
