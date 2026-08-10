@@ -11,7 +11,7 @@ from ._plugin_legacy import ShukGuangYaDisk as _LegacyPlugin
 
 
 class ShukGuangYaDisk(_LegacyPlugin):
-    plugin_version = "2.2.12"
+    plugin_version = "2.2.13"
     plugin_author = "liheng-lk"
     author_url = "https://github.com/liheng-lk/Guangyadisk"
 
@@ -40,7 +40,6 @@ class ShukGuangYaDisk(_LegacyPlugin):
         return apis
 
     def _activate_storage_after_login(self) -> None:
-        """登录成功后启用插件并重新初始化原有存储适配器。"""
         self._enabled = True
         config = {
             "enabled": True,
@@ -118,7 +117,6 @@ class ShukGuangYaDisk(_LegacyPlugin):
         }
 
     def poll_login(self) -> Dict[str, Any]:
-        """按 KoWming 原流程轮询 device_code；成功后直接落盘 token 并重新初始化存储。"""
         if not self._device_code:
             return {"success": False, "message": "请先获取二维码", "waiting": False, "stage": "missing_device_code"}
         if self._qr_expires_at and time.time() > self._qr_expires_at:
