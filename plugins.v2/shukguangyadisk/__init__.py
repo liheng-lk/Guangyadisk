@@ -9,7 +9,7 @@ from ._plugin_legacy import ShukGuangYaDisk as _LegacyPlugin
 
 
 class ShukGuangYaDisk(_LegacyPlugin):
-    plugin_version = "2.2.5"
+    plugin_version = "2.2.6"
     plugin_author = "liheng-lk"
     author_url = "https://github.com/liheng-lk/Guangyadisk"
 
