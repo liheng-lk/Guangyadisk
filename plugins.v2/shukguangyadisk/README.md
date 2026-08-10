@@ -1,63 +1,72 @@
 # Shuk-光鸭云盘
 
-MoviePilot / Emby 光鸭云盘存储插件，支持扫码登录、文件管理、存储挂载。
+当前维护仓库：`https://github.com/liheng-lk/Guangyadisk`
 
-## 功能特性
+MoviePilot / Emby / Jellyfin 光鸭云盘存储插件，支持 **扫码登录 + 短信登录**、文件管理、存储挂载、流式播放与 WebDAV。
 
-- **扫码登录** — 光鸭云盘原生设备码 OAuth2 授权
-- **Token 自动刷新** — 过期自动续签，无需手动干预
-- **文件管理** — 浏览、上传、下载、删除、重命名、新建文件夹
-- **存储挂载** — 作为 MoviePilot / Emby 外部存储源使用
-- **Vue 前端** — 现代化界面
+## 版本
+
+当前版本：**2.2.5**
+
+### v2.2.5
+
+- 新增 **扫码登录 / 短信登录** 两种登录方式切换；
+- 修复扫码设备码请求，补充 `device_id`；
+- 扫码 scope 更新为 `user profile sso offline_access`；
+- 二维码使用接口返回的 `verification_uri_complete`；
+- 授权成功后自动保存 `access_token` 与 `refresh_token`；
+- 保留短信验证码登录作为扫码登录的备用方式。
+
+### v2.2.4
+
+兼容新版 MoviePilot `get_item_strict()` 存储接口，解决：
+
+```text
+'GuangYaApi' object has no attribute 'get_item_strict'
+```
 
 ## 安装
 
-### 插件市场安装（推荐）
+MoviePilot 自定义插件源填写：
 
-1. MoviePilot 后台 → **设置** → **插件市场**
-2. 添加自定义源：
-
-```
-https://github.com/ShukeBta/Guangyadisk
+```text
+https://github.com/liheng-lk/Guangyadisk
 ```
 
-3. 刷新市场，搜索 `Shuk-光鸭云盘`，点击安装
+当前实际插件目录：
 
-### 本地安装
-
-将 `plugins.v2/shuk-guangyadisk/` 目录复制到 MoviePilot 的 `app/plugins/` 目录下，重启即可。
-
-## 使用
-
-1. 启用插件
-2. 点击「获取二维码」，用光鸭云盘 App 扫码
-3. 扫码完成后自动登录
-4. 在存储管理中选择「Shuk-光鸭云盘」即可使用
-
-## 配置项
-
-| 配置项 | 说明 | 默认值 |
-|--------|------|--------|
-| 启用插件 | 是否启用 | false |
-| Client ID | 客户端标识 | guangya_web |
-| 每页数量 | 文件列表每页条数 | 100 |
-| 排序字段 | 文件排序方式 | 3 |
-| 排序类型 | 升序/降序 | 1 |
-| 永久删除 | 删除时跳过回收站 | false |
-
-## 文件结构
-
-```
-plugins.v2/shuk-guangyadisk/
-├── __init__.py          # 插件入口
-├── guangya_client.py    # HTTP 客户端 & 登录
-├── guangya_api.py       # 文件操作 API
-├── requirements.txt     # Python 依赖
-└── dist/                # Vue 前端资源
-    ├── index.html
-    └── assets/
+```text
+plugins.v2/shukguangyadisk/
 ```
 
-## 许可证
+## 登录
+
+### 扫码登录（推荐）
+
+进入插件页面选择 **扫码登录**，使用光鸭云盘 App 扫描二维码并确认授权。插件会自动轮询授权结果并保存 Token。
+
+### 短信登录
+
+进入插件页面选择 **短信登录**，输入账号绑定手机号，获取短信验证码并完成登录。
+
+两种登录方式登录成功后共用相同的文件管理、WebDAV、流式播放和 Token 自动刷新逻辑。
+
+## 功能
+
+- 扫码授权登录
+- 短信验证码登录
+- Token 自动刷新
+- 文件浏览、上传、下载、删除、重命名、新建目录
+- MoviePilot 外部存储
+- `/stream` HTTP Range 流式代理
+- `/browse` 目录浏览
+- `/webdav` WebDAV
+- Emby / Jellyfin 访问
+
+## 维护说明
+
+本仓库为 fork 维护版本。当前兼容修复与发布由 `liheng-lk` 维护，上游项目和历史贡献保留在 Git 历史中。
+
+## License
 
 MIT
