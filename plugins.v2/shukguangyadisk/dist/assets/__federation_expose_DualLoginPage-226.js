@@ -3,12 +3,33 @@ import { importShared } from './__federation_fn_import-054b33c3.js';
 
 const { defineComponent, h, ref } = await importShared('vue');
 
+const PLUGIN_ID = 'ShukGuangYaDisk';
+
+function rewritePluginPath(path) {
+  return String(path || '').replace(/^plugin\/GuangyaDisk/, `plugin/${PLUGIN_ID}`);
+}
+
+function createApiProxy(api) {
+  if (!api) return api;
+  return {
+    ...api,
+    get: api.get ? ((path, options) => api.get(rewritePluginPath(path), options)) : undefined,
+    post: api.post ? ((path, body, options) => api.post(rewritePluginPath(path), body, options)) : undefined,
+    put: api.put ? ((path, body, options) => api.put(rewritePluginPath(path), body, options)) : undefined,
+    delete: api.delete ? ((path, options) => api.delete(rewritePluginPath(path), options)) : undefined,
+  };
+}
+
 async function apiPost(props, path, body) {
-  const apiPath = `plugin/GuangyaDisk${path}`;
+  const apiPath = `plugin/${PLUGIN_ID}${path}`;
   if (props.api?.post) return props.api.post(apiPath, body || {});
-  const response = await fetch(`/api/v1/plugin/GuangyaDisk${path}`, {
+  const response = await fetch(`/api/v1/plugin/${PLUGIN_ID}${path}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}),
   });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`HTTP ${response.status}${text ? `: ${text.slice(0, 180)}` : ''}`);
+  }
   return response.json();
 }
 
@@ -26,6 +47,7 @@ const DualLoginPage = defineComponent({
     const mode = ref('qr'); const phone = ref(''); const code = ref(''); const verificationId = ref('');
     const sending = ref(false); const logging = ref(false); const message = ref(''); const messageType = ref('');
     const clearMessage = () => { message.value = ''; messageType.value = ''; };
+    const proxiedApi = createApiProxy(props.api);
 
     const sendCode = async () => {
       if (!phone.value.trim()) { messageType.value = 'error'; message.value = '请输入手机号'; return; }
@@ -75,7 +97,7 @@ const DualLoginPage = defineComponent({
 
     return () => h('div', { style: { width: '100%', boxSizing: 'border-box' } }, [
       selector,
-      mode.value === 'qr' ? h(OldPage, { initialConfig: props.initialConfig, api: props.api, onClose: () => emit('close'), onSwitch: () => emit('switch') }) : smsForm(),
+      mode.value === 'qr' ? h(OldPage, { initialConfig: props.initialConfig, api: proxiedApi, onClose: () => emit('close'), onSwitch: () => emit('switch') }) : smsForm(),
     ]);
   },
 });
