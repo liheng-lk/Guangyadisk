@@ -2,11 +2,6 @@
 
 基于 Cloudflare Workers 的 Telegram 公开频道网页镜像，用于将 `https://t.me/s/<channel>` 的公开 Web Preview 通过自定义域名访问。
 
-当前部署域名示例：
-
-```text
-https://tgm.li668.asia/
-```
 
 ## 当前频道
 
