@@ -76,7 +76,7 @@ class ShukGuangYaDisk(_LegacyPlugin):
 
     plugin_name = "光鸭云盘助手"
     plugin_desc = "MoviePilot 光鸭云盘存储助手，支持扫码/短信登录、目录浏览、整理上传、下载、移动、复制和 Emby 直连。"
-    plugin_version = "2.2.16"
+    plugin_version = "2.2.17"
     plugin_author = "liheng-lk"
     author_url = "https://github.com/liheng-lk/Guangyadisk"
 
