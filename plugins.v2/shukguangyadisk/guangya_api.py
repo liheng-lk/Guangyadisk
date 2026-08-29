@@ -26,6 +26,106 @@ class GuangYaApi(_GuangYaApi):
         """严格查询文件或目录；当前远端实现沿用 get_item 的查询语义。"""
         return self.get_item(path)
 
+    def _invalidate_path_cache(self, path: str) -> None:
+        """清理目标路径及全部子路径缓存，避免移动/删除/重命名后的幽灵缓存。"""
+        normalized_path = self._normalize_path(path)
+        subtree_prefix = f"{normalized_path.rstrip('/')}/"
+        for cache in (self._id_cache, self._item_cache):
+            for key in list(cache.keys()):
+                normalized_key = self._normalize_path(key)
+                if normalized_key == normalized_path or normalized_key.startswith(subtree_prefix):
+                    cache.pop(key, None)
+
+    def _path_to_id(self, path: str) -> str:
+        """通过路径获取文件 ID，并支持超过单页上限的大目录分页查找。"""
+        normalized_path = self._normalize_path(path)
+        if normalized_path == "/":
+            return ""
+
+        cached_id = self._id_cache.get(normalized_path)
+        if cached_id:
+            return cached_id
+
+        current_id = ""
+        current_path = "/"
+        parts = Path(normalized_path).parts[1:]
+
+        for part in parts:
+            found = None
+            page = 0
+
+            while True:
+                response = self.client.get_file_list(
+                    parent_id=current_id,
+                    page_size=self._page_size,
+                    order_by=self._order_by,
+                    sort_type=self._sort_type,
+                    file_types=[],
+                    page=page,
+                )
+
+                if response.get("code", -1) != 0 and response.get("msg") != "success":
+                    raise RuntimeError(
+                        "【光鸭云盘】读取目录失败: "
+                        f"path={current_path}, code={response.get('code')}, msg={response.get('msg')}"
+                    )
+
+                data = response.get("data", {}) or {}
+                items = data.get("list", []) or []
+
+                for item in items:
+                    if item.get("fileName") == part:
+                        found = item
+                        break
+
+                if found:
+                    break
+                if not items or len(items) < self._page_size:
+                    break
+
+                try:
+                    total = int(data.get("total") or 0)
+                except (TypeError, ValueError):
+                    total = 0
+
+                if total and (page + 1) * self._page_size >= total:
+                    break
+                page += 1
+
+            if not found:
+                missing_path = (
+                    f"{current_path.rstrip('/')}/{part}"
+                    if current_path != "/"
+                    else f"/{part}"
+                )
+                self._invalidate_path_cache(missing_path)
+                raise FileNotFoundError(f"【光鸭云盘】{normalized_path} 不存在")
+
+            current_id = str(found.get("fileId", ""))
+            current_path = (
+                f"{current_path.rstrip('/')}/{part}"
+                if current_path != "/"
+                else f"/{part}"
+            )
+            self._cache_path_id(current_path, current_id)
+            self._build_file_item_from_api(
+                str(Path(current_path).parent).replace("\\", "/") or "/",
+                found,
+            )
+
+        return current_id
+
+    def list(self, fileitem: schemas.FileItem) -> list[schemas.FileItem]:
+        """浏览目录；目录在整理过程中已被移动/删除时按空目录处理。"""
+        try:
+            return super().list(fileitem)
+        except FileNotFoundError:
+            logger.debug(
+                "【光鸭云盘】【list】目录已不存在，按空目录处理: %s",
+                fileitem.path,
+            )
+            return []
+
     @staticmethod
     def _fmt_bytes(size: int) -> str:
         """格式化字节大小。"""
